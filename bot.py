@@ -59,9 +59,13 @@ class Question:
             parts = []
             for label, group in zip(self.matching_labels, self.matching_groups):
                 mapped = ", ".join(str(index + 1) for index in group)
-                parts.append(f"{label} -> {mapped}")
-            return "; ".join(parts)
-        return "; ".join(self.options[index] for index in self.correct_indexes)
+                parts.append(f"{label}) {mapped}")
+            return "\n".join(parts)
+        lines = []
+        for index in self.correct_indexes:
+            letter = OPTION_LETTERS[index]
+            lines.append(f"{letter}) {self.options[index]}")
+        return "\n".join(lines)
 
 
 @dataclass(slots=True)
@@ -212,32 +216,45 @@ def test_menu_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
+def format_options_text(question: Question) -> str:
+    """Форматирует варианты ответа как пронумерованный список для вывода в тексте сообщения."""
+    lines = []
+    for index, option in enumerate(question.options):
+        letter = OPTION_LETTERS[index]
+        lines.append(f"{letter}) {option}")
+    return "\n".join(lines)
+
+
 def single_choice_keyboard(question: Question) -> InlineKeyboardMarkup:
+    """Кнопки содержат только букву варианта — полный текст выводится в сообщении."""
     buttons = [
-        [InlineKeyboardButton(option, callback_data=f"answer:{index}")]
-        for index, option in enumerate(question.options)
+        [InlineKeyboardButton(OPTION_LETTERS[index], callback_data=f"answer:{index}")]
+        for index in range(len(question.options))
     ]
     return InlineKeyboardMarkup(buttons)
 
 
 def multiple_choice_keyboard(question: Question, selected: set[int]) -> InlineKeyboardMarkup:
+    """Кнопки содержат букву и галочку — полный текст выводится в сообщении."""
     buttons = []
-    for index, option in enumerate(question.options):
+    for index in range(len(question.options)):
+        letter = OPTION_LETTERS[index]
         mark = "☑" if index in selected else "☐"
-        buttons.append([InlineKeyboardButton(f"{mark} {option}", callback_data=f"toggle:{index}")])
-    buttons.append([InlineKeyboardButton("Ответить", callback_data="submit")])
+        buttons.append([InlineKeyboardButton(f"{mark} {letter}", callback_data=f"toggle:{index}")])
+    buttons.append([InlineKeyboardButton("✅ Ответить", callback_data="submit")])
     return InlineKeyboardMarkup(buttons)
 
 
 def matching_keyboard(question: Question, selected: set[int], step: int) -> InlineKeyboardMarkup:
+    """Кнопки содержат номер и галочку — полный текст выводится в сообщении."""
     buttons = []
-    for index, option in enumerate(question.options):
+    for index in range(len(question.options)):
         mark = "☑" if index in selected else "☐"
         buttons.append(
-            [InlineKeyboardButton(f"{mark} {index + 1}. {option}", callback_data=f"match_toggle:{index}")]
+            [InlineKeyboardButton(f"{mark} {index + 1}", callback_data=f"match_toggle:{index}")]
         )
     current_label = question.matching_labels[step]
-    buttons.append([InlineKeyboardButton(f"Готово для пункта {current_label}", callback_data="match_next")])
+    buttons.append([InlineKeyboardButton(f"✅ Готово для пункта {current_label}", callback_data="match_next")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -312,21 +329,25 @@ async def send_current_question(chat_id: int, context: ContextTypes.DEFAULT_TYPE
         return
 
     question = session.current_question
-    header = f"Вопрос {session.current_index + 1} из {session.total_questions}\n\n{question.text}"
+    options_text = format_options_text(question)
+    header = f"Вопрос {session.current_index + 1} из {session.total_questions}\n\n{question.text}\n\n{options_text}"
+
     if question.is_matching:
         labels_text = ", ".join(question.matching_labels)
         prompt = (
             "\n\nЭто задание на соответствие."
             f"\nВыбирайте ответы по порядку для пунктов: {labels_text}."
             f"\nСейчас выберите вариант(ы) для пункта {question.matching_labels[session.matching_step]}."
+            "\n\nНажимайте кнопки с номерами вариантов ниже."
         )
         keyboard = matching_keyboard(question, session.selected_indexes, session.matching_step)
     elif question.has_multiple_answers:
-        prompt = "\n\nВ этом вопросе может быть несколько правильных ответов. Выберите все варианты и нажмите «Ответить»."
+        prompt = "\n\nВ этом вопросе может быть несколько правильных ответов.\nВыберите все подходящие буквы и нажмите «Ответить»."
         keyboard = multiple_choice_keyboard(question, session.selected_indexes)
     else:
-        prompt = "\n\nВыберите правильный вариант."
+        prompt = "\n\nВыберите букву правильного варианта."
         keyboard = single_choice_keyboard(question)
+
     await context.bot.send_message(chat_id=chat_id, text=header + prompt, reply_markup=keyboard)
 
 
@@ -392,17 +413,19 @@ def evaluate_answer(question: Question, selected_indexes: set[int]) -> tuple[boo
     correct_text = question.correct_option_text()
 
     if is_correct:
-        return True, "Верно! Отличный ответ."
-    return False, f"Неверно. Правильный вариант ответа: {correct_text}"
+        return True, f"✅ Верно!\n\nПравильный ответ:\n{correct_text}"
+    return False, f"❌ Неверно.\n\nПравильный ответ:\n{correct_text}"
 
 
 def evaluate_matching_answer(question: Question, selected_groups: list[list[int]]) -> tuple[bool, str]:
     normalized_selected = [sorted(group) for group in selected_groups]
     normalized_expected = [sorted(group) for group in question.matching_groups]
     is_correct = normalized_selected == normalized_expected
+    correct_text = question.correct_option_text()
+
     if is_correct:
-        return True, "Верно! Соответствие указано правильно."
-    return False, f"Неверно. Правильное соответствие: {question.correct_option_text()}"
+        return True, f"✅ Верно! Соответствие указано правильно.\n\nПравильный ответ:\n{correct_text}"
+    return False, f"❌ Неверно.\n\nПравильное соответствие:\n{correct_text}"
 
 
 async def handle_single_answer(query, context: ContextTypes.DEFAULT_TYPE, option_index: int) -> None:

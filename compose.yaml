@@ -1,0 +1,7 @@
+services:
+  bot:
+    build: .
+    container_name: tg_bot_for_reaviz
+    restart: unless-stopped
+    env_file:
+      - .env

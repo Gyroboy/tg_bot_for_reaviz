@@ -34,6 +34,21 @@ $env:TELEGRAM_BOT_TOKEN="ВАШ_ТОКЕН"
 python bot.py
 ```
 
+## Структура проекта
+
+- `bot.py` — тонкая точка входа: настраивает логирование и запускает приложение.
+- `reaviz_bot/config.py` — загрузка переменных окружения и настроек.
+- `reaviz_bot/application.py` — сборка Telegram Application и регистрация обработчиков.
+- `reaviz_bot/models.py` — доменные модели вопроса и тестовой сессии.
+- `reaviz_bot/question_repository.py` — загрузка вопросов из Excel.
+- `reaviz_bot/question_parser.py` — разбор правильных ответов и типов вопросов.
+- `reaviz_bot/question_bank.py` — выбор случайных вопросов.
+- `reaviz_bot/evaluator.py` — проверка ответов пользователя.
+- `reaviz_bot/keyboards.py` — фабрика Telegram-клавиатур.
+- `reaviz_bot/message_formatter.py` — форматирование текста вопросов.
+- `reaviz_bot/session_store.py` — хранение сессии в `chat_data`.
+- `reaviz_bot/handlers.py` — Telegram-обработчики команд, текста и callback-кнопок.
+
 ## Формат Excel
 
 - 1 столбец: вопрос

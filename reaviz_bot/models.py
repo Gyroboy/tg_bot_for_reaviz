@@ -42,6 +42,7 @@ class Question:
 class TestSession:
     questions: list[Question]
     awaiting_count: bool = False
+    awaiting_numbers: bool = False
     current_index: int = 0
     correct_answers: int = 0
     selected_indexes: set[int] = field(default_factory=set)
@@ -75,4 +76,3 @@ class TestSession:
         self.selected_indexes.clear()
         self.matching_step = 0
         self.matching_answers.clear()
-

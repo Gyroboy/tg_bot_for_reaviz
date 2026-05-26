@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
-from reaviz_bot.constants import CHOOSE_COUNT_BUTTON, OPTION_LETTERS, START_BUTTON, STOP_TEST_BUTTON
+from reaviz_bot.constants import (
+    CHOOSE_COUNT_BUTTON,
+    CHOOSE_NUMBERS_BUTTON,
+    OPTION_LETTERS,
+    START_BUTTON,
+    STOP_TEST_BUTTON,
+)
 from reaviz_bot.models import Question
 
 
@@ -12,7 +18,7 @@ class KeyboardFactory:
 
     def test_menu(self) -> ReplyKeyboardMarkup:
         return ReplyKeyboardMarkup(
-            [[CHOOSE_COUNT_BUTTON], [STOP_TEST_BUTTON]],
+            [[CHOOSE_COUNT_BUTTON], [CHOOSE_NUMBERS_BUTTON], [STOP_TEST_BUTTON]],
             resize_keyboard=True,
         )
 
@@ -43,4 +49,3 @@ class KeyboardFactory:
             [InlineKeyboardButton(f"✅ Готово для пункта {current_label}", callback_data="match_next")]
         )
         return InlineKeyboardMarkup(buttons)
-

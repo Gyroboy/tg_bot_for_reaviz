@@ -3,6 +3,7 @@ from __future__ import annotations
 
 START_BUTTON = "Начать тест"
 CHOOSE_COUNT_BUTTON = "Выбрать количество вопросов"
+CHOOSE_NUMBERS_BUTTON = "Выбрать номера вопросов"
 STOP_TEST_BUTTON = "Остановить тест"
 
 OPTION_LETTERS = ["а", "б", "в", "г", "д", "е", "ж", "з", "и"]
@@ -18,4 +19,3 @@ LATIN_TO_CYRILLIC = {
     "h": "з",
     "i": "и",
 }
-

@@ -1,20 +1,29 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from dotenv import load_dotenv
 
+from reaviz_bot.constants import ANATOMY_SUBJECT, HISTOLOGY_SUBJECT
+
 
 ENV_FILE = Path(".env")
-QUESTION_FILE = Path("anatomy_test.xlsx")
+def default_question_files() -> "dict[str, Path]":
+    return {
+        ANATOMY_SUBJECT: Path("anatomy_test.xlsx"),
+        HISTOLOGY_SUBJECT: Path("histology_test.xlsx"),
+    }
+
+
+QUESTION_FILES = default_question_files()
 
 
 @dataclass(frozen=True, slots=True)
 class BotConfig:
     token: str
-    question_file: Path = QUESTION_FILE
+    question_files: "dict[str, Path]" = field(default_factory=default_question_files)
 
     @classmethod
     def from_environment(cls) -> "BotConfig":

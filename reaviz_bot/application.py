@@ -18,19 +18,23 @@ class BotApplicationFactory:
         self.config = config
 
     def build(self) -> Application:
-        questions = ExcelQuestionRepository(self.config.question_file).load_questions()
-        if not questions:
-            raise RuntimeError(f"Не удалось загрузить вопросы из файла {self.config.question_file}.")
+        question_banks: dict[str, QuestionBank] = {}
+        for subject, path in self.config.question_files.items():
+            questions = ExcelQuestionRepository(path).load_questions()
+            if not questions:
+                raise RuntimeError(f"Не удалось загрузить вопросы из файла {path}.")
+            question_banks[subject] = QuestionBank(questions)
 
-        question_bank = QuestionBank(questions)
-        handlers = TelegramBotHandlers(question_bank)
+        handlers = TelegramBotHandlers(question_banks)
 
         application = Application.builder().token(self.config.token).build()
-        application.bot_data["total_questions"] = question_bank.total_questions
+        application.bot_data["total_questions"] = {
+            subject: bank.total_questions for subject, bank in question_banks.items()
+        }
         application.add_handler(CommandHandler("start", handlers.start))
         application.add_handler(CallbackQueryHandler(handlers.handle_callback))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.handle_text))
-        LOGGER.info("Loaded questions: %s", question_bank.total_questions)
+        LOGGER.info("Loaded questions: %s", application.bot_data["total_questions"])
         return application
 
 

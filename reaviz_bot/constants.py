@@ -6,6 +6,7 @@ CHOOSE_COUNT_BUTTON = "Выбрать количество вопросов"
 CHOOSE_NUMBERS_BUTTON = "Выбрать номера вопросов"
 STOP_TEST_BUTTON = "Остановить тест"
 CHANGE_SUBJECT_BUTTON = "Сменить предмет"
+BACK_BUTTON = "⬅️ Назад"
 
 ANATOMY_SUBJECT = "anatomy"
 HISTOLOGY_SUBJECT = "histology"

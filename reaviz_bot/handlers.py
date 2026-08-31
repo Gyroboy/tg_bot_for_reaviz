@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from reaviz_bot.constants import (
+    BACK_BUTTON,
     CHANGE_SUBJECT_BUTTON,
     CHOOSE_COUNT_BUTTON,
     CHOOSE_NUMBERS_BUTTON,
@@ -121,6 +122,28 @@ class TelegramBotHandlers:
             reply_markup=self.keyboards.main_menu(),
         )
 
+    async def go_back(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        session = self.sessions.get(context)
+
+        # Из ввода количества/номеров — возвращаемся в меню теста, а не дальше.
+        if session is not None and (session.awaiting_count or session.awaiting_numbers):
+            session.awaiting_count = False
+            session.awaiting_numbers = False
+            await update.message.reply_text(
+                "Ок, вернулись в меню теста.",
+                reply_markup=self.keyboards.test_menu(),
+            )
+            return
+
+        # Из меню теста или во время теста — в меню предмета.
+        self.sessions.reset(context)
+        subject = self.sessions.get_subject(context)
+        await update.message.reply_text(
+            f"Меню предмета «{SUBJECT_NAMES[subject]}». "
+            "Нажмите «Начать тест» или смените предмет.",
+            reply_markup=self.keyboards.main_menu(),
+        )
+
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = normalize_spaces(update.message.text)
 
@@ -146,6 +169,9 @@ class TelegramBotHandlers:
             return
         if text == STOP_TEST_BUTTON:
             await self.stop_test(update, context)
+            return
+        if text == BACK_BUTTON:
+            await self.go_back(update, context)
             return
 
         await self.handle_test_input(update, context)

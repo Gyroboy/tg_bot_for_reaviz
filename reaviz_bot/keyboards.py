@@ -3,6 +3,7 @@ from __future__ import annotations
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 
 from reaviz_bot.constants import (
+    BACK_BUTTON,
     CHANGE_SUBJECT_BUTTON,
     CHOOSE_COUNT_BUTTON,
     CHOOSE_NUMBERS_BUTTON,
@@ -29,7 +30,12 @@ class KeyboardFactory:
 
     def test_menu(self) -> ReplyKeyboardMarkup:
         return ReplyKeyboardMarkup(
-            [[CHOOSE_COUNT_BUTTON], [CHOOSE_NUMBERS_BUTTON], [STOP_TEST_BUTTON]],
+            [
+                [CHOOSE_COUNT_BUTTON],
+                [CHOOSE_NUMBERS_BUTTON],
+                [STOP_TEST_BUTTON],
+                [BACK_BUTTON],
+            ],
             resize_keyboard=True,
         )
 

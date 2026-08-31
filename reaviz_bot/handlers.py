@@ -5,7 +5,16 @@ import re
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from reaviz_bot.constants import CHOOSE_COUNT_BUTTON, CHOOSE_NUMBERS_BUTTON, START_BUTTON, STOP_TEST_BUTTON
+from reaviz_bot.constants import (
+    CHANGE_SUBJECT_BUTTON,
+    CHOOSE_COUNT_BUTTON,
+    CHOOSE_NUMBERS_BUTTON,
+    START_BUTTON,
+    STOP_TEST_BUTTON,
+    SUBJECT_BUTTONS,
+    SUBJECT_NAMES,
+    SUBJECT_NAMES_GENITIVE,
+)
 from reaviz_bot.evaluator import AnswerEvaluator
 from reaviz_bot.keyboards import KeyboardFactory
 from reaviz_bot.message_formatter import QuestionMessageFormatter
@@ -18,33 +27,68 @@ from reaviz_bot.text_utils import normalize_spaces
 class TelegramBotHandlers:
     def __init__(
         self,
-        question_bank: QuestionBank,
+        question_banks: dict[str, QuestionBank],
         keyboards: KeyboardFactory | None = None,
         formatter: QuestionMessageFormatter | None = None,
         evaluator: AnswerEvaluator | None = None,
         sessions: TelegramSessionStore | None = None,
     ) -> None:
-        self.question_bank = question_bank
+        self.question_banks = question_banks
         self.keyboards = keyboards or KeyboardFactory()
         self.formatter = formatter or QuestionMessageFormatter()
         self.evaluator = evaluator or AnswerEvaluator()
         self.sessions = sessions or TelegramSessionStore()
 
+    def _bank_for(self, context: ContextTypes.DEFAULT_TYPE) -> QuestionBank | None:
+        subject = self.sessions.get_subject(context)
+        if subject is None:
+            return None
+        return self.question_banks.get(subject)
+
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.sessions.reset(context)
+        self.sessions.set_subject(context, None)
         await update.message.reply_text(
-            "Привет! Я помогу прорешивать тесты по анатомии.",
+            "Привет! Я помогу прорешивать тесты. Выберите предмет:",
+            reply_markup=self.keyboards.subject_menu(),
+        )
+
+    async def choose_subject(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+        subject: str,
+    ) -> None:
+        self.sessions.reset(context)
+        self.sessions.set_subject(context, subject)
+        bank = self.question_banks[subject]
+        await update.message.reply_text(
+            f"Предмет: {SUBJECT_NAMES[subject]}. Вопросов в базе: {bank.total_questions}.\n"
+            "Нажмите «Начать тест».",
             reply_markup=self.keyboards.main_menu(),
+        )
+
+    async def prompt_for_subject(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await update.message.reply_text(
+            "Сначала выберите предмет.",
+            reply_markup=self.keyboards.subject_menu(),
         )
 
     async def start_test_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         self.sessions.set(context, TestSession(questions=[]))
+        subject = self.sessions.get_subject(context)
         await self._show_test_menu(
             update,
+            f"Тест по {SUBJECT_NAMES_GENITIVE[subject]}. "
             "Выберите действие: случайные вопросы, вопросы по номерам или остановка текущего теста.",
         )
 
     async def ask_for_question_count(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        bank = self._bank_for(context)
+        if bank is None:
+            await self.prompt_for_subject(update, context)
+            return
+
         session = self.sessions.get(context)
         if session is None:
             session = TestSession(questions=[], awaiting_count=True)
@@ -53,7 +97,7 @@ class TelegramBotHandlers:
         session.awaiting_numbers = False
 
         await update.message.reply_text(
-            f"Введите количество вопросов от 1 до {self.question_bank.total_questions}.",
+            f"Введите количество вопросов от 1 до {bank.total_questions}.",
             reply_markup=self.keyboards.test_menu(),
         )
 
@@ -79,6 +123,17 @@ class TelegramBotHandlers:
 
     async def handle_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         text = normalize_spaces(update.message.text)
+
+        if text in SUBJECT_BUTTONS:
+            await self.choose_subject(update, context, SUBJECT_BUTTONS[text])
+            return
+        if text == CHANGE_SUBJECT_BUTTON:
+            await self.start(update, context)
+            return
+
+        if self.sessions.get_subject(context) is None:
+            await self.prompt_for_subject(update, context)
+            return
 
         if text == START_BUTTON:
             await self.start_test_menu(update, context)
@@ -112,14 +167,19 @@ class TelegramBotHandlers:
             )
             return
 
+        bank = self._bank_for(context)
+        if bank is None:
+            await self.prompt_for_subject(update, context)
+            return
+
         text = normalize_spaces(update.message.text)
         if not text.isdigit():
             await update.message.reply_text("Введите число, например: 20")
             return
 
         count = int(text)
-        if not 1 <= count <= self.question_bank.total_questions:
-            await update.message.reply_text(f"Введите число от 1 до {self.question_bank.total_questions}.")
+        if not 1 <= count <= bank.total_questions:
+            await update.message.reply_text(f"Введите число от 1 до {bank.total_questions}.")
             return
 
         await self.start_random_test(update, context, count)
@@ -133,13 +193,18 @@ class TelegramBotHandlers:
             )
             return
 
+        bank = self._bank_for(context)
+        if bank is None:
+            await self.prompt_for_subject(update, context)
+            return
+
         text = normalize_spaces(update.message.text)
         numbers = self._parse_question_numbers(text)
         if not numbers:
             await update.message.reply_text("Введите номера вопросов, например: 10-15 или 10, 12, 15.")
             return
 
-        questions = self.question_bank.pick_by_numbers(numbers)
+        questions = bank.pick_by_numbers(numbers)
         if not questions:
             await update.message.reply_text("Не нашёл вопросов с такими номерами. Проверьте ввод и попробуйте ещё раз.")
             return
@@ -161,7 +226,12 @@ class TelegramBotHandlers:
         context: ContextTypes.DEFAULT_TYPE,
         count: int,
     ) -> None:
-        session = TestSession(questions=self.question_bank.pick_random(count))
+        bank = self._bank_for(context)
+        if bank is None:
+            await self.prompt_for_subject(update, context)
+            return
+
+        session = TestSession(questions=bank.pick_random(count))
         self.sessions.set(context, session)
 
         await update.message.reply_text(

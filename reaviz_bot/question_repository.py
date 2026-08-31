@@ -20,22 +20,57 @@ class ExcelQuestionRepository:
         sheet = workbook[workbook.sheetnames[0]]
         questions: list[Question] = []
 
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            question = self._parse_row(row, len(questions) + 1)
+        rows = sheet.iter_rows(min_row=1, values_only=True)
+        header = next(rows, None)
+        answer_column = self._find_answer_column(header)
+
+        for row in rows:
+            question = self._parse_row(row, len(questions) + 1, answer_column)
             if question is not None:
                 questions.append(question)
 
         return questions
 
-    def _parse_row(self, row: tuple[object, ...], fallback_id: int) -> Question | None:
+    @staticmethod
+    def _find_answer_column(header: tuple[object, ...] | None) -> int | None:
+        """Индекс столбца с правильным ответом по заголовку.
+
+        В файле по анатомии это последний столбец, а в файле по гистологии
+        после него идут ещё служебные столбцы, поэтому ориентируемся на текст
+        заголовка, а не на позицию.
+        """
+
+        if not header:
+            return None
+        for index, value in enumerate(header):
+            if value and normalize_spaces(str(value)).lower().startswith("правильный ответ"):
+                return index
+        return None
+
+    def _parse_row(
+        self,
+        row: tuple[object, ...],
+        fallback_id: int,
+        answer_column: int | None,
+    ) -> Question | None:
         if not row or not row[0]:
             return None
 
+        if answer_column is not None and answer_column < len(row):
+            option_values = row[1:answer_column]
+            raw_answer = str(row[answer_column]) if row[answer_column] is not None else ""
+        else:
+            option_values = row[1:-1]
+            raw_answer = str(row[-1])
+
         question_text = normalize_spaces(str(row[0]))
-        options = [strip_option_prefix(str(value)) for value in row[1:-1] if value]
-        raw_answer = str(row[-1])
+        options = [strip_option_prefix(str(value)) for value in option_values if value]
         question_type = self.answer_parser.detect_question_type(raw_answer)
-        correct_indexes = self.answer_parser.parse_correct_indexes(raw_answer)
+        correct_indexes = [
+            index
+            for index in self.answer_parser.parse_correct_indexes(raw_answer)
+            if index < len(options)
+        ]
         matching_labels: list[str] = []
         matching_groups: list[list[int]] = []
 
